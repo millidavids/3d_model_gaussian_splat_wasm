@@ -10,6 +10,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use web_time::Instant;
+use wgpu_3dgs_viewer::core::Gaussians;
 use winit::application::ApplicationHandler;
 use winit::event::{ElementState, MouseButton, MouseScrollDelta, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
@@ -17,6 +18,11 @@ use winit::window::{Window, WindowId};
 
 use crate::camera_control::OrbitCamera;
 use crate::graphics::Graphics;
+use crate::scene;
+
+/// A one-slot inbox for a splat parsed off the main loop (drag-and-drop, async):
+/// the loader fills it, the render loop drains it on the next frame.
+pub(crate) type LoadInbox = Rc<RefCell<Option<Gaussians>>>;
 
 /// Build the event loop and run the viewer.
 pub fn run() {
@@ -44,6 +50,8 @@ struct App {
     last_frame: Option<Instant>,
     dragging: bool,
     last_cursor: Option<(f64, f64)>,
+    /// Splat dropped onto the page, waiting to be swapped in (web only).
+    load_inbox: LoadInbox,
 }
 
 impl App {
@@ -55,6 +63,19 @@ impl App {
             last_frame: None,
             dragging: false,
             last_cursor: None,
+            load_inbox: Rc::new(RefCell::new(None)),
+        }
+    }
+
+    /// Swap in a splat that finished loading, framing the camera to fit it.
+    fn drain_pending_load(&mut self) {
+        let Some(gaussians) = self.load_inbox.borrow_mut().take() else {
+            return;
+        };
+        let (center, radius) = scene::bounds(&gaussians);
+        self.orbit.frame(center, radius);
+        if let Some(graphics) = self.graphics.borrow_mut().as_mut() {
+            graphics.load_gaussians(&gaussians);
         }
     }
 }
@@ -72,7 +93,10 @@ impl ApplicationHandler for App {
         );
 
         #[cfg(target_arch = "wasm32")]
-        mount_canvas(&window);
+        {
+            mount_canvas(&window);
+            crate::loader::setup_drag_and_drop(self.load_inbox.clone());
+        }
 
         self.window = Some(window.clone());
         event_loop.set_control_flow(ControlFlow::Poll);
@@ -135,6 +159,8 @@ impl ApplicationHandler for App {
                     .last_frame
                     .map_or(0.0, |last| (now - last).as_secs_f32());
                 self.last_frame = Some(now);
+
+                self.drain_pending_load();
 
                 if !self.dragging {
                     self.orbit.advance(dt);

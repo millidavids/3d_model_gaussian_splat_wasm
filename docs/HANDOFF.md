@@ -42,10 +42,15 @@
 - Rust workspace (resolver 3, edition 2024, Rust 1.93.1), `wasm32-unknown-unknown` target.
 - `crates/gsplat-core` — the `PoseEstimator` trait seam + `ImageSet`/`PosedScene` + a test.
 - `crates/gsplat-app` — **the Phase 1 viewer**: winit 0.30 + wgpu 29 + `wgpu-3dgs-viewer`
-  0.7. Modules: `scene` (procedural sample splat — rainbow sphere + RGB axes),
-  `camera_control` (orbit camera over `gs::Camera`), `graphics` (wgpu setup + per-frame
-  canvas-size sync + render), `app` (winit event loop, web + native), `web_entry`
-  (`#[wasm_bindgen(start)]`).
+  0.7. Modules: `scene` (procedural sample splat + `bounds` for framing),
+  `camera_control` (orbit camera over `gs::Camera`, `frame()` to fit a loaded splat),
+  `graphics` (wgpu setup + per-frame canvas-size sync + render + `load_gaussians`),
+  `app` (winit event loop, web + native; a one-slot load inbox), `loader` (web-only
+  drag-and-drop `.ply`/`.spz` → `Gaussians`), `web_entry` (`#[wasm_bindgen(start)]`).
+- **Drag-and-drop loading works**: drop a `.ply`/`.spz` and it swaps in, camera auto-frames.
+  Verified in-browser by dispatching a synthetic file drop (console: "Reading PLY format with
+  60 Gaussians" → "loaded small.ply"). `scene::sample_splat_ply_roundtrips` (set
+  `DUMP_SAMPLE_PLY=<path>`) emits a small `.ply` fixture for manual testing.
 - Web build: root `index.html` + `Trunk.toml`; `.cargo/config.toml` sets `+simd128`.
   `trunk` installed at `~/.cargo/bin`, plus matching `wasm-bindgen-cli` 0.2.126 (the
   trunk-bundled download 404s for that version — installed from source instead).
@@ -65,11 +70,12 @@
 
 ## Where we paused — open decisions for the user
 
-1. **Commit the Phase 1 viewer?** (House rule: never commit without explicit approval.)
+1. **Commit the Phase 1.5 drag-and-drop loader?** (House rule: never commit without approval.)
+   The Phase 1 viewer is committed (`fd23e80`); the loader work is staged but uncommitted.
 2. **Next step — Phase 2 (training from a posed dataset).** This opens with the *other half*
    of Spike 1: is Brush (`brush-render`/`brush-train`) consumable as a pinned dependency, or
-   must we vendor/fork? Optional Phase 1.5 polish first: a drag-and-drop `.ply`/`.spz` file
-   loader (slots in behind the existing `Gaussians` type) and a GitHub Pages deploy.
+   must we vendor/fork? Remaining Phase 1.5 polish (optional): a GitHub Pages deploy, and a
+   `release` wasm build with `wasm-opt` (the debug wasm is ~18 MB).
 
 ## Pointers
 

@@ -83,8 +83,9 @@ A truly in-browser splat→mesh (2DGS/TSDF in Rust/WASM) is greenfield — defer
 - **Phase 1 — Viewer first (lowest risk):** render a splat in-browser via `wgpu-3dgs-viewer`,
   orbit + zoom on a deployed page. **DONE** — `crates/gsplat-app` (winit 0.30 + wgpu 29 +
   `wgpu-3dgs-viewer` 0.7) renders a *procedurally-generated* sample splat (rainbow sphere +
-  RGB axes), so no external asset or license question; a real `.ply`/`.spz` loader slots in
-  behind the same `Gaussians` type. Two wasm-readiness fixes were required: wgpu's
+  RGB axes), so no external asset or license question, and a **drag-and-drop `.ply`/`.spz`
+  loader** swaps real splats in behind the same `Gaussians` type (auto-framing the camera to
+  fit). Two wasm-readiness fixes were required: wgpu's
   `fragile-send-sync-non-atomic-wasm` feature, and `+simd128` (glam `Vec3A: Pod`). Proves
   WASM + WebGPU + hosting end-to-end.
 - **Phase 2 — Training from a prepared (posed) dataset:** adopt Brush's training path on a

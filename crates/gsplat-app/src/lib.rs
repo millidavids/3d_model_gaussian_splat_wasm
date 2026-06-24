@@ -5,6 +5,8 @@
 mod app;
 mod camera_control;
 mod graphics;
+#[cfg(target_arch = "wasm32")]
+mod loader;
 mod scene;
 #[cfg(target_arch = "wasm32")]
 mod web_entry;

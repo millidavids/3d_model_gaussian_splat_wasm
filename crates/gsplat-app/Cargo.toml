@@ -34,6 +34,7 @@ pollster.workspace = true
 wgpu = { workspace = true, features = ["fragile-send-sync-non-atomic-wasm"] }
 wasm-bindgen.workspace = true
 wasm-bindgen-futures.workspace = true
+js-sys.workspace = true
 console_error_panic_hook.workspace = true
 console_log.workspace = true
 web-sys = { workspace = true, features = [
@@ -44,4 +45,12 @@ web-sys = { workspace = true, features = [
     "HtmlCanvasElement",
     "Node",
     "CssStyleDeclaration",
+    # Drag-and-drop file loading.
+    "Event",
+    "EventTarget",
+    "DragEvent",
+    "DataTransfer",
+    "FileList",
+    "File",
+    "Blob",
 ] }

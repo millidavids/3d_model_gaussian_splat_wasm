@@ -852,6 +852,7 @@ dependencies = [
  "console_log",
  "glam",
  "gsplat-core",
+ "js-sys",
  "log",
  "pollster",
  "wasm-bindgen",

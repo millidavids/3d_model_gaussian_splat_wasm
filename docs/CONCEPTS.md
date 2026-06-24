@@ -240,6 +240,28 @@ WASM and JavaScript can't call each other directly without generated bindings.
 > `wasm-bindgen` *library* compiled into the WASM must exactly match the `wasm-bindgen` *CLI* tool
 > that post-processes it. Mismatch = hard error. (We hit this; see §10.)
 
+### 5.6 Loading a real splat: file formats + drag-and-drop
+
+Phase 1 shows a *generated* splat; to view a *real* one the page must read a splat file the user
+drops onto it. Two concepts:
+
+- **The file formats.** A splat is saved as a list of Gaussians on disk. **`.ply`** (Polygon File
+  Format) is the common one — here a binary table with one row per Gaussian and columns for
+  position, the SH colour coefficients, opacity, scale, and rotation (the on-disk twins of §3's
+  fields; scale and opacity are stored *log-/logit-encoded* and decoded on load — that's the
+  `exp()` that turns a stored scale back into a real size). **`.spz`** is a newer, *compressed*
+  splat format (quantized to ~10× smaller). The `wgpu-3dgs-core` reader turns either into the same
+  `Gaussians` list, so the rest of the app never cares which it was — a clean example of hiding a
+  format behind a type.
+
+- **Reading a dropped file in the browser.** The HTML **drag-and-drop** API hands us a `File` when
+  something is dropped on the page (we must cancel the `dragover` default, or the browser just
+  *navigates* to the file). Reading the file's bytes is **asynchronous** — `File.arrayBuffer()`
+  returns a `Promise` — the same "can't block the tab" situation as GPU init (§5.4). So we read +
+  parse in a spawned future and drop the result into a shared one-slot **inbox**; the render loop
+  picks it up on its next frame, swaps the splat in, and **re-frames** the camera to fit it (§6.1).
+  No blocking, no threads, no channels. (See `crates/gsplat-app/src/loader.rs`.)
+
 ---
 
 ## 6. The camera and the matrices
@@ -417,6 +439,7 @@ The most instructive moments so far were the wasm/GPU integration bugs. Each is 
 - **`bytemuck` / `Pod`** — Rust crate / trait for safely reinterpreting a struct as raw bytes (for GPU upload).
 - **Canvas** — the HTML element WebGPU draws into.
 - **Covariance (Σ)** — the 3×3 matrix encoding a Gaussian's ellipsoid (size + orientation).
+- **Drag-and-drop / async inbox** — read a dropped file off the main loop, hand the parsed splat to the render loop via a one-slot inbox.
 - **COOP / COEP** — HTTP headers that make a page *cross-origin isolated*; needed only for SharedArrayBuffer / wasm threads.
 - **Device pixel ratio (DPR)** — physical pixels per CSS pixel (2 on Retina); size the draw buffer by it.
 - **Differentiable rendering** — a renderer you can backpropagate through, enabling splat training.
@@ -426,6 +449,7 @@ The most instructive moments so far were the wasm/GPU integration bugs. Each is 
 - **Gaussian (3D)** — one fuzzy ellipsoidal blob: position, scale, rotation, colour, opacity.
 - **Linear vs. sRGB** — math-correct colour space vs. display-encoded colour space.
 - **Painter's algorithm** — draw far-to-near so nearer things cover farther ones.
+- **`.ply` / `.spz`** — splat file formats: PLY = a per-Gaussian binary table; SPZ = a compressed splat.
 - **Pose** — where/how a camera was positioned when a photo was taken.
 - **Projection matrix** — applies the lens (FOV, aspect, near/far): camera space → clip space.
 - **Quaternion** — a four-number, gimbal-lock-free representation of a 3D rotation.

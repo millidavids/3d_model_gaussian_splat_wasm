@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use glam::uvec2;
 use wgpu_3dgs_viewer as gs;
-use wgpu_3dgs_viewer::core::{GaussianDisplayMode, GaussianMaxStdDev, GaussianShDegree};
+use wgpu_3dgs_viewer::core::{GaussianDisplayMode, GaussianMaxStdDev, GaussianShDegree, Gaussians};
 use winit::window::Window;
 
 use crate::camera_control::OrbitCamera;
@@ -98,6 +98,28 @@ impl Graphics {
             config,
             camera,
             viewer,
+        }
+    }
+
+    /// Replace the displayed splat (e.g. from a dropped `.ply`/`.spz` file).
+    ///
+    /// Rebuilds the viewer for `gaussians`. Uses SH degree 3 so real, trained
+    /// splats show their view-dependent colour (the synthetic sample is flat).
+    pub fn load_gaussians(&mut self, gaussians: &Gaussians) {
+        match gs::Viewer::new(&self.device, self.config.view_formats[0], gaussians) {
+            Ok(mut viewer) => {
+                viewer.update_gaussian_transform(
+                    &self.queue,
+                    SPLAT_SIZE,
+                    GaussianDisplayMode::Splat,
+                    GaussianShDegree::new(3).expect("sh degree 3 is valid"),
+                    false,
+                    GaussianMaxStdDev::new(MAX_STD_DEV).expect("max std dev in range"),
+                );
+                self.viewer = viewer;
+                log::info!("loaded splat with {} gaussians", gaussians.len());
+            }
+            Err(e) => log::error!("could not build viewer for loaded splat: {e:?}"),
         }
     }
 

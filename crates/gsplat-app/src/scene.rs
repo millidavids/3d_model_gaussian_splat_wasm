@@ -7,7 +7,7 @@
 //! drops in behind the same [`Gaussians`] type later (it is just another source).
 
 use glam::{Quat, U8Vec4, Vec3};
-use wgpu_3dgs_viewer::core::{Gaussian, Gaussians};
+use wgpu_3dgs_viewer::core::{Gaussian, Gaussians, IterGaussian};
 
 /// Gaussians placed over the sphere surface.
 const SPHERE_COUNT: usize = 24_000;
@@ -30,6 +30,22 @@ pub fn sample_splat() -> Gaussians {
     push_axis(&mut gaussians, Vec3::Y, U8Vec4::new(40, 200, 60, 255));
     push_axis(&mut gaussians, Vec3::Z, U8Vec4::new(50, 90, 230, 255));
     Gaussians::from(gaussians)
+}
+
+/// Axis-aligned bounding centre and radius (half the box diagonal) of a splat,
+/// used to frame an arbitrary loaded splat in the orbit camera. Empty → unit.
+pub fn bounds(gaussians: &Gaussians) -> (Vec3, f32) {
+    let mut min = Vec3::splat(f32::INFINITY);
+    let mut max = Vec3::splat(f32::NEG_INFINITY);
+    for g in gaussians.iter_gaussian() {
+        min = min.min(g.pos);
+        max = max.max(g.pos);
+    }
+    if !min.is_finite() || !max.is_finite() {
+        return (Vec3::ZERO, 1.0);
+    }
+    let center = (min + max) * 0.5;
+    (center, (max - center).length().max(1e-3))
 }
 
 /// Lay out points evenly on a sphere (Fibonacci lattice), coloured by surface
@@ -79,13 +95,48 @@ fn splat(pos: Vec3, color: U8Vec4, scale: f32) -> Gaussian {
 
 #[cfg(test)]
 mod tests {
+    use std::io::Cursor;
+
+    use wgpu_3dgs_viewer::core::{GaussiansSource, PlyGaussians, WriteIterGaussian};
+
     use super::*;
-    use wgpu_3dgs_viewer::core::IterGaussian;
 
     #[test]
     fn sample_splat_has_expected_count() {
         let gaussians = sample_splat();
         assert_eq!(gaussians.len(), SPHERE_COUNT + 3 * AXIS_COUNT);
+    }
+
+    #[test]
+    fn bounds_of_sample_is_centred_and_sized() {
+        let (center, radius) = bounds(&sample_splat());
+        // Sphere is at the origin; axes reach AXIS_LENGTH along +X/+Y/+Z, so the
+        // box centre sits a little off-origin and the radius is near AXIS_LENGTH.
+        assert!(center.length() < 0.5, "roughly centred, got {center:?}");
+        assert!(
+            (0.5..2.5).contains(&radius),
+            "plausible radius, got {radius}"
+        );
+    }
+
+    /// The loader path leans on `Gaussians::read_from(.., Ply)`; prove it round-trips
+    /// real PLY bytes produced by the same library. Set `DUMP_SAMPLE_PLY=<path>` to
+    /// also emit a small `.ply` fixture for manual drag-and-drop testing.
+    #[test]
+    fn sample_splat_ply_roundtrips() {
+        let ply: PlyGaussians = sample_splat().iter_gaussian().collect();
+        let mut bytes = Vec::new();
+        ply.write_to(&mut bytes).expect("write ply");
+
+        let parsed =
+            Gaussians::read_from(&mut Cursor::new(&bytes), GaussiansSource::Ply).expect("read ply");
+        assert_eq!(parsed.len(), sample_splat().len());
+
+        if let Ok(path) = std::env::var("DUMP_SAMPLE_PLY") {
+            let small: PlyGaussians = sample_splat().iter_gaussian().take(400).collect();
+            let mut file = std::fs::File::create(&path).expect("create dump file");
+            small.write_to(&mut file).expect("write dump");
+        }
     }
 
     #[test]

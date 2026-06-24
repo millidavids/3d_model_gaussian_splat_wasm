@@ -14,9 +14,12 @@ const DRAG_SENSITIVITY: f32 = 0.006;
 const ZOOM_SENSITIVITY: f32 = 0.1;
 /// Gentle idle spin (radians/sec) so the page reads as 3D before any input.
 const AUTO_SPIN_SPEED: f32 = 0.25;
-/// How close / far the camera may be pulled.
+/// Default zoom limits (the sample splat); [`OrbitCamera::frame`] overrides these
+/// per loaded splat.
 const MIN_DISTANCE: f32 = 1.5;
 const MAX_DISTANCE: f32 = 20.0;
+/// Camera distance as a multiple of a framed splat's radius (so it fits in view).
+const FRAME_DISTANCE_FACTOR: f32 = 2.5;
 /// Keep elevation just shy of the poles to avoid a degenerate look-direction.
 const PITCH_LIMIT: f32 = std::f32::consts::FRAC_PI_2 - 1e-3;
 
@@ -29,6 +32,9 @@ pub struct OrbitCamera {
     yaw: f32,
     /// Elevation, radians.
     pitch: f32,
+    /// Zoom limits, kept relative to whatever splat is framed (see [`Self::frame`]).
+    min_distance: f32,
+    max_distance: f32,
 }
 
 impl OrbitCamera {
@@ -39,7 +45,20 @@ impl OrbitCamera {
             distance: 4.0,
             yaw: 0.0,
             pitch: 0.35,
+            min_distance: MIN_DISTANCE,
+            max_distance: MAX_DISTANCE,
         }
+    }
+
+    /// Re-frame to fit a splat of the given centre and radius, keeping the
+    /// current view angles. Distance and zoom limits scale with the radius so
+    /// any splat — unit sphere or room-sized scan — sits sensibly in view.
+    pub fn frame(&mut self, center: Vec3, radius: f32) {
+        let radius = radius.max(1e-3);
+        self.target = center;
+        self.distance = radius * FRAME_DISTANCE_FACTOR;
+        self.min_distance = radius * 0.4;
+        self.max_distance = radius * 12.0;
     }
 
     /// Rotate the orbit by a mouse drag of `(dx, dy)` pixels.
@@ -50,8 +69,8 @@ impl OrbitCamera {
 
     /// Dolly in/out by a scroll amount (positive scrolls in).
     pub fn zoom(&mut self, scroll: f32) {
-        self.distance =
-            (self.distance * (1.0 - scroll * ZOOM_SENSITIVITY)).clamp(MIN_DISTANCE, MAX_DISTANCE);
+        self.distance = (self.distance * (1.0 - scroll * ZOOM_SENSITIVITY))
+            .clamp(self.min_distance, self.max_distance);
     }
 
     /// Advance the idle auto-spin by `delta_time` seconds.
@@ -112,6 +131,24 @@ mod tests {
             orbit.zoom(-1.0);
         }
         assert!(orbit.distance <= MAX_DISTANCE);
+    }
+
+    #[test]
+    fn frame_places_camera_at_radius_scaled_distance() {
+        let mut orbit = OrbitCamera::new();
+        let center = Vec3::new(5.0, -2.0, 1.0);
+        orbit.frame(center, 3.0);
+
+        let mut camera = gs::Camera::new(0.1..1e4, 1.0);
+        orbit.apply_to(&mut camera);
+
+        let to_target = center - camera.pos;
+        assert!((to_target.length() - 3.0 * FRAME_DISTANCE_FACTOR).abs() < 1e-3);
+        // Zoom limits now track the framed radius.
+        for _ in 0..1000 {
+            orbit.zoom(1.0);
+        }
+        assert!(orbit.distance >= 3.0 * 0.4 - 1e-3);
     }
 
     #[test]
