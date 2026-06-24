@@ -3,7 +3,26 @@
 In-browser Gaussian-splatting 3D model generator: **photos → camera poses → trained splat**,
 running fully client-side as a static **WebAssembly + WebGPU** site. Free/open tool;
 permissively-licensed throughout so outputs are usable in a commercial game. See
-`docs/DESIGN.md` for the architecture and plan, and `docs/HANDOFF.md` for conversation state.
+`docs/DESIGN.md` for the architecture and plan, `docs/HANDOFF.md` for conversation state, and
+`docs/CONCEPTS.md` for the from-scratch concept primer.
+
+## Learning Primer — `docs/CONCEPTS.md` (MAINTAIN AS WE GO)
+
+The repo owner is using this project to **learn** the concepts, not just to ship it. So we keep
+a from-scratch teaching primer at **`docs/CONCEPTS.md`**, modelled on the sibling
+[`../lo_fi_converter_blender_addon/docs/CONCEPTS.md`](../lo_fi_converter_blender_addon/docs/CONCEPTS.md).
+
+**Standing rule:** whenever we introduce, use, or debug a new concept, method, term, library,
+or algorithm — update `docs/CONCEPTS.md` in the same change. Do not let code outrun the primer.
+
+Style to match (see the sibling):
+- **Teach from zero.** Assume no prior 3D/GPU/Rust-wasm knowledge; define every term in plain
+  language, give a **mental model / analogy**, and say *why it matters* and *how we used it here*.
+- **Structure:** an anchoring idea up top → numbered concept sections → a **"hard lessons"**
+  section (the bugs that taught a principle) → a **named-methods table** (real technique names +
+  sources, for further reading) → a **glossary** of one-line definitions.
+- Keep it honest and specific to *this* codebase (reference our actual files/decisions), and
+  prune anything that becomes wrong.
 
 ## Technology Stack
 
