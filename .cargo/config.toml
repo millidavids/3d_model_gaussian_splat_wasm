@@ -1,0 +1,8 @@
+# wasm build settings, applied to every cargo invocation (incl. `trunk build`).
+#
+# +simd128: enables WebAssembly SIMD. Required here because wgpu-3dgs-core's GPU
+# buffer PODs use glam's `Vec3A`, whose `bytemuck::Pod` impl only exists for the
+# 16-byte SIMD representation. It's also a straight performance win and is
+# supported by every browser that ships WebGPU.
+[target.wasm32-unknown-unknown]
+rustflags = ["-C", "target-feature=+simd128"]

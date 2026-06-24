@@ -1,0 +1,47 @@
+[package]
+name = "gsplat-app"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+description = "In-browser Gaussian-splat viewer (Phase 1): renders a splat via WebGPU and lets you orbit it."
+
+# cdylib: the wasm artifact trunk + wasm-bindgen consume for the web build.
+# rlib:   lets native `cargo check`/tests compile the same code for fast iteration.
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+gsplat-core.workspace = true
+wgpu-3dgs-viewer.workspace = true
+wgpu.workspace = true
+winit.workspace = true
+glam.workspace = true
+log.workspace = true
+# Monotonic clock that works on both targets (re-exports std::time natively).
+web-time.workspace = true
+
+# Native-only: a blocking executor for the async wgpu init off the web.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+pollster.workspace = true
+
+# Web-only: wasm glue, browser logging, and the DOM bits winit needs to mount
+# its canvas. The wgpu feature makes its (single-threaded) wasm handles Send+Sync
+# — sound on wasm with no threads, and required because wgpu-3dgs-core's async
+# buffer download returns `impl Future + Send`.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wgpu = { workspace = true, features = ["fragile-send-sync-non-atomic-wasm"] }
+wasm-bindgen.workspace = true
+wasm-bindgen-futures.workspace = true
+console_error_panic_hook.workspace = true
+console_log.workspace = true
+web-sys = { workspace = true, features = [
+    "Document",
+    "Window",
+    "Element",
+    "HtmlElement",
+    "HtmlCanvasElement",
+    "Node",
+    "CssStyleDeclaration",
+] }

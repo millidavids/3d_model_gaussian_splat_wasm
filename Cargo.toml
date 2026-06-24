@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/gsplat-core"]
+members = ["crates/gsplat-core", "crates/gsplat-app"]
 
 [workspace.package]
 version = "0.1.0"
@@ -9,6 +9,24 @@ license = "MIT OR Apache-2.0"
 authors = ["David Yurek <david.a.yurek@gmail.com>"]
 rust-version = "1.93"
 
-# Filled in as crates are added (wgpu, wgpu-3dgs-viewer, brush, image, rust-cv …).
+# Filled in as crates are added (brush, image, rust-cv …).
 [workspace.dependencies]
 gsplat-core = { path = "crates/gsplat-core" }
+
+# Rendering / GPU. Versions are pinned to what wgpu-3dgs-viewer 0.7 expects —
+# the wgpu ecosystem is tightly version-coupled, so these move together.
+wgpu-3dgs-viewer = "0.7"
+wgpu = "29"
+winit = "0.30"
+glam = "0.32"
+bytemuck = { version = "1.25", features = ["derive"] }
+log = "0.4"
+pollster = "0.4"
+
+# Web (wasm32) only.
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+console_error_panic_hook = "0.1"
+console_log = "1"
+web-time = "1"
+web-sys = "0.3"

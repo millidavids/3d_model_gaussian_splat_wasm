@@ -1,8 +1,9 @@
 # Design: In-Browser Gaussian-Splatting 3D Model Generator
 
-> Status: **Phase 0 (scaffolding)**. This is the living design doc. It was drafted,
-> independently reviewed by a staff-level review pass, and revised. Section 9 records the
-> research spikes that shaped it.
+> Status: **Phase 1 complete** — an in-browser WebGPU splat viewer is deployed locally and
+> visually verified (orbit + zoom a sample splat). Next: Phase 2 (training from a posed
+> dataset). This is the living design doc. It was drafted, independently reviewed by a
+> staff-level review pass, and revised. Section 9 records the research spikes that shaped it.
 
 ## 1. Goal & hard constraints
 
@@ -76,11 +77,16 @@ A truly in-browser splat→mesh (2DGS/TSDF in Rust/WASM) is greenfield — defer
 ## 7. Phases (each ships something visible)
 
 - **Spikes (week 1, do first):** see §9 — (1) Is Brush consumable? + headers check;
-  (2) pose feasibility memo. **DONE for Spike 2; Spike 1 pending.**
-- **Phase 0 — Scaffold:** repo, Rust workspace, wasm/wgpu + `trunk` build, CI, license,
-  deployed "hello WebGPU". *(in progress)*
-- **Phase 1 — Viewer first (lowest risk):** load a `.ply`/`.splat`, render in-browser via
-  `wgpu-3dgs-viewer`; deploy a public orbit-the-splat URL. Proves WASM+WebGPU+hosting.
+  (2) pose feasibility memo. **Spike 2 DONE; Spike 1 partially answered by Phase 1
+  (no COOP/COEP needed); Brush-as-library still pending.**
+- **Phase 0 — Scaffold:** repo, Rust workspace, wasm/wgpu + `trunk` build, license. **DONE.**
+- **Phase 1 — Viewer first (lowest risk):** render a splat in-browser via `wgpu-3dgs-viewer`,
+  orbit + zoom on a deployed page. **DONE** — `crates/gsplat-app` (winit 0.30 + wgpu 29 +
+  `wgpu-3dgs-viewer` 0.7) renders a *procedurally-generated* sample splat (rainbow sphere +
+  RGB axes), so no external asset or license question; a real `.ply`/`.spz` loader slots in
+  behind the same `Gaussians` type. Two wasm-readiness fixes were required: wgpu's
+  `fragile-send-sync-non-atomic-wasm` feature, and `+simd128` (glam `Vec3A: Pod`). Proves
+  WASM + WebGPU + hosting end-to-end.
 - **Phase 2 — Training from a prepared (posed) dataset:** adopt Brush's training path on a
   known COLMAP/Nerfstudio sample; live in-browser training. The "ML in your tab" milestone.
 - **Phase 3 — Pose (rust-cv):** raw photos → posed dataset, in-browser CPU SfM behind the
@@ -106,10 +112,16 @@ A truly in-browser splat→mesh (2DGS/TSDF in Rust/WASM) is greenfield — defer
 
 ## 9. Research spikes
 
-### Spike 1 — Is Brush consumable as a dependency? *(PENDING)*
+### Spike 1 — Is Brush consumable as a dependency? *(PARTIAL)*
 From a throwaway crate, depend on `brush-render`/`brush-train` (pinned SHA) and drive
 train+render without forking; read `crossOriginIsolated` on the web build to settle hosting.
 Outcome decides depend-vs-vendor/fork and the host requirement.
+- **Hosting half — answered by Phase 1:** the viewer runs single-threaded wasm + WebGPU and
+  needs **no `SharedArrayBuffer`**, so **no COOP/COEP / `crossOriginIsolated`** — plain static
+  hosting (incl. GitHub Pages) works. SharedArrayBuffer/COOP-COEP only return if a future
+  *wasm-threads* path is adopted (Brush training may want it; re-test then).
+- **Brush-as-library half — still pending:** whether `brush-render`/`brush-train` are
+  consumable without a fork is untouched; tackle it at the start of Phase 2.
 
 ### Spike 2 — Can any pose model fit a browser? *(DONE — verdict below)*
 - Feed-forward 3D models (VGGT, MapAnything, DUSt3R/MASt3R, Fast3R, Spann3R) are all

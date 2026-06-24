@@ -1,0 +1,18 @@
+# Trunk build/serve config for the static splat-viewer site.
+[build]
+target = "index.html"
+# Release builds shrink the wasm; trunk fetches wasm-opt on demand.
+release = false
+
+[tools]
+# Must match the resolved wasm-bindgen crate (Cargo.lock); trunk downloads this
+# CLI rather than using an older one that may be on PATH.
+wasm_bindgen = "0.2.126"
+
+[serve]
+addresses = ["127.0.0.1"]
+port = 8137
+open = false
+
+# Single-threaded WebGPU needs no cross-origin isolation, so no special headers
+# here. (If a future wasm-threads path needs SharedArrayBuffer, add COOP/COEP.)

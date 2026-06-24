@@ -11,8 +11,23 @@ one accelerator a static web page can use.
 
 ## Status
 
-**Phase 0 — scaffolding.** Nothing user-facing yet. See [`docs/DESIGN.md`](docs/DESIGN.md)
-for the full architecture, decisions, and phased plan.
+**Phase 1 — viewer working.** An in-browser WebGPU viewer renders a Gaussian splat you can
+orbit and zoom. It currently shows a procedurally-generated sample splat (a colour-by-normal
+sphere with RGB axes); loading your own `.ply`/`.spz` and the training pipeline come next.
+See [`docs/DESIGN.md`](docs/DESIGN.md) for the full architecture, decisions, and phased plan.
+
+## Run it
+
+```bash
+# one-time: install the wasm build tool
+cargo install trunk            # or grab a prebuilt binary from trunk-rs releases
+rustup target add wasm32-unknown-unknown
+
+trunk serve --open             # builds wasm + serves at http://127.0.0.1:8137/
+```
+
+Needs a WebGPU-capable browser (Chrome/Edge 113+, or Safari 18+). Drag to orbit, scroll to
+zoom. No cross-origin-isolation headers required — it hosts as plain static files.
 
 ## How it will work
 
@@ -34,7 +49,10 @@ A game-ready **mesh** is a later, local step (Blender) — the public tool outpu
 ## Layout
 
 - `crates/gsplat-core` — UI-agnostic core types and pipeline seams (e.g. `PoseEstimator`).
+- `crates/gsplat-app` — the wasm web app: WebGPU splat viewer (winit + wgpu + `wgpu-3dgs-viewer`).
+- `index.html` / `Trunk.toml` — the static-site entry and build config.
 - `docs/DESIGN.md` — the living design doc and plan.
+- `docs/CONCEPTS.md` — a from-scratch primer on every concept the project uses.
 
 ## License
 

@@ -35,25 +35,45 @@
   that *does* fit is the splat **training** (Brush).
 - **Splat first; mesh later, locally in Blender** (can't live in the static site).
 
-## Current repo state (Phase 0, verified)
+## Current repo state (Phase 1 complete, verified)
 
-- Git initialized; **nothing committed yet** (awaiting the user's go-ahead).
+- **Phase 0 committed** (`711069b`). **Phase 1 work is staged in the tree but NOT yet
+  committed** (awaiting the user's go-ahead, per house rule).
 - Rust workspace (resolver 3, edition 2024, Rust 1.93.1), `wasm32-unknown-unknown` target.
 - `crates/gsplat-core` — the `PoseEstimator` trait seam + `ImageSet`/`PosedScene` + a test.
-- `README.md`, `docs/DESIGN.md` (canonical plan), this file.
-- Green: `cargo check`, `cargo test` (1 pass), `cargo fmt --check`, **and
-  `cargo check --target wasm32-unknown-unknown`**.
+- `crates/gsplat-app` — **the Phase 1 viewer**: winit 0.30 + wgpu 29 + `wgpu-3dgs-viewer`
+  0.7. Modules: `scene` (procedural sample splat — rainbow sphere + RGB axes),
+  `camera_control` (orbit camera over `gs::Camera`), `graphics` (wgpu setup + per-frame
+  canvas-size sync + render), `app` (winit event loop, web + native), `web_entry`
+  (`#[wasm_bindgen(start)]`).
+- Web build: root `index.html` + `Trunk.toml`; `.cargo/config.toml` sets `+simd128`.
+  `trunk` installed at `~/.cargo/bin`, plus matching `wasm-bindgen-cli` 0.2.126 (the
+  trunk-bundled download 404s for that version — installed from source instead).
+- **Visually verified in Chrome** (`trunk serve` → `http://127.0.0.1:8137/`): renders the
+  splat ball, auto-spins, drag-orbit / scroll-zoom, no console errors, 25 200 gaussians.
+- Green: `cargo check` (native + wasm), `cargo test` (6 pass), `cargo clippy -D warnings`
+  (both targets), `cargo fmt --check`, `trunk build`.
 
-## Where we paused — two open decisions for the user
+### Gotchas worth remembering (load-bearing)
+- `wgpu-3dgs-core` returns `impl Future + Send` from an async buffer download → needs wgpu's
+  **`fragile-send-sync-non-atomic-wasm`** feature on wasm (sound: no threads).
+- glam **`Vec3A: Pod`** only exists with **`+simd128`** → set in `.cargo/config.toml`.
+- winit's web `inner_size()` is unreliable at init → `graphics::drawable_size` reconciles the
+  surface to the canvas CSS-size × DPR **every frame** (fixes a full-screen color smear).
+- The `Gaussian` struct holds **linear** `scale` and **linear RGBA** `color` (the GPU pod
+  builds covariance from linear scale; no exp/log on our side).
 
-1. **Commit the Phase 0 scaffold?** (House rule: never commit without explicit approval.)
-2. **Next step:** Spike 1 (validate Brush is consumable + `crossOriginIsolated` check) vs.
-   jump straight to the **Phase 1 viewer** (`wgpu-3dgs-viewer` + `trunk` → orbit a sample
-   splat on a deployed page). Assistant's lean: **viewer first** — visible win, independent
-   of the Brush question, derisks the wasm+WebGPU+hosting toolchain.
+## Where we paused — open decisions for the user
+
+1. **Commit the Phase 1 viewer?** (House rule: never commit without explicit approval.)
+2. **Next step — Phase 2 (training from a posed dataset).** This opens with the *other half*
+   of Spike 1: is Brush (`brush-render`/`brush-train`) consumable as a pinned dependency, or
+   must we vendor/fork? Optional Phase 1.5 polish first: a drag-and-drop `.ply`/`.spz` file
+   loader (slots in behind the existing `Gaussians` type) and a GitHub Pages deploy.
 
 ## Pointers
 
 - Plan / architecture / risks / spikes: [`DESIGN.md`](DESIGN.md)
+- Concept primer (kept current as we work — house rule): [`CONCEPTS.md`](CONCEPTS.md)
 - House coding conventions: [`../CLAUDE.md`](../CLAUDE.md)
 - Auto-memory for this repo includes `project-gsplat-wasm` (the locked decisions, condensed).

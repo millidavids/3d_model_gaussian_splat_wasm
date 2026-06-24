@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <title>gsplat-wasm — splat viewer</title>
+
+    <!-- Build the app crate (cdylib) to wasm; trunk runs wasm-bindgen and injects the loader. -->
+    <link data-trunk rel="rust" href="crates/gsplat-app/Cargo.toml" />
+
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        background: #0c0d10;
+        font-family: ui-sans-serif, system-ui, sans-serif;
+      }
+      canvas {
+        position: fixed;
+        inset: 0;
+        outline: none;
+        touch-action: none;
+      }
+      #hint {
+        position: fixed;
+        left: 50%;
+        bottom: 16px;
+        transform: translateX(-50%);
+        padding: 6px 14px;
+        border-radius: 999px;
+        background: rgba(20, 22, 28, 0.6);
+        color: #c9cdd6;
+        font-size: 13px;
+        letter-spacing: 0.02em;
+        backdrop-filter: blur(6px);
+        pointer-events: none;
+        user-select: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="hint">drag to orbit · scroll to zoom</div>
+  </body>
+</html>
