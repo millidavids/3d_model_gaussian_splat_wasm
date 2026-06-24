@@ -1,4 +1,5 @@
 /target
 /dist
+/dist-release
 **/*.rs.bk
 .DS_Store

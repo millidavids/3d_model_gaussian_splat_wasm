@@ -70,12 +70,17 @@
 
 ## Where we paused — open decisions for the user
 
-1. **Commit the Phase 1.5 drag-and-drop loader?** (House rule: never commit without approval.)
-   The Phase 1 viewer is committed (`fd23e80`); the loader work is staged but uncommitted.
-2. **Next step — Phase 2 (training from a posed dataset).** This opens with the *other half*
-   of Spike 1: is Brush (`brush-render`/`brush-train`) consumable as a pinned dependency, or
-   must we vendor/fork? Remaining Phase 1.5 polish (optional): a GitHub Pages deploy, and a
-   `release` wasm build with `wasm-opt` (the debug wasm is ~18 MB).
+Committed through Phase 1.5: `446bbc5` (loader). Deploy work (release build verified
+18 MB → 2.3 MB; `.github/workflows/deploy.yml`; README/CONCEPTS updates) is **staged but
+uncommitted**.
+
+1. **Finish the deploy** (two manual steps only the owner can do): in the GitHub repo,
+   Settings → Pages → Source = "GitHub Actions"; then **push** (the workflow deploys on push
+   to `main`/`master`). Remote exists: `origin git@github.com:millidavids/3d_model_gaussian_splat_wasm.git`.
+   Note: local branch is `master`; the workflow triggers on both `main` and `master`.
+2. **Next step — Phase 2 (training from a posed dataset).** Opens with the *other half* of
+   Spike 1: is Brush (`brush-render`/`brush-train`) consumable as a pinned dependency, or must
+   we vendor/fork?
 
 ## Pointers
 

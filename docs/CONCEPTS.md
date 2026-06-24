@@ -262,6 +262,23 @@ drops onto it. Two concepts:
   picks it up on its next frame, swaps the splat in, and **re-frames** the camera to fit it (§6.1).
   No blocking, no threads, no channels. (See `crates/gsplat-app/src/loader.rs`.)
 
+### 5.7 Shipping it: release build + static hosting
+
+The dev build is huge (~18 MB wasm) because it's unoptimized with debug info. For shipping,
+**`trunk build --release`** does two things: compiles with optimizations, then runs
+**`wasm-opt`** (from Binaryen) — a WebAssembly-to-WebAssembly optimizer that strips dead code
+and shrinks the binary. Together they took our wasm from **18 MB → ~2.3 MB**.
+
+Because the whole app is just static files (one `.html`, one `.js`, one `.wasm`), it hosts
+anywhere that serves files — including **GitHub Pages**, free. Two wrinkles:
+
+- **Base path.** Project Pages live under `https://user.github.io/<repo>/`, so asset links must
+  be prefixed with `/<repo>/`. Trunk's **`--public-url`** flag does that (it sets an HTML
+  `<base>`); we pass it only in CI so local `trunk serve` still works at `/`.
+- **No special headers.** As established in §10, single-threaded WebGPU needs no COOP/COEP, so
+  plain Pages hosting is enough — nothing to configure. (A GitHub **Actions** workflow,
+  `.github/workflows/deploy.yml`, builds and publishes on push.)
+
 ---
 
 ## 6. The camera and the matrices

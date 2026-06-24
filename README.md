@@ -27,7 +27,13 @@ trunk serve --open             # builds wasm + serves at http://127.0.0.1:8137/
 ```
 
 Needs a WebGPU-capable browser (Chrome/Edge 113+, or Safari 18+). Drag to orbit, scroll to
-zoom. No cross-origin-isolation headers required — it hosts as plain static files.
+zoom, and **drop a `.ply`/`.spz` file** to view your own splat. No cross-origin-isolation
+headers required — it hosts as plain static files.
+
+For a production bundle: `trunk build --release` (optimizes + runs `wasm-opt`, ~18 MB → ~2 MB
+wasm) writes the static site to `dist/`. A GitHub Actions workflow
+(`.github/workflows/deploy.yml`) publishes it to GitHub Pages on push — enable it once via
+**Settings → Pages → Source: GitHub Actions**.
 
 ## How it will work
 
