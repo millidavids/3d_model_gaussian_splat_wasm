@@ -1,0 +1,10 @@
+[package]
+name = "gsplat-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+description = "Core types and pipeline seams for the in-browser Gaussian-splatting model generator."
+
+[dependencies]
