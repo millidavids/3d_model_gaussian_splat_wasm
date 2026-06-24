@@ -69,13 +69,23 @@ impl App {
 
     /// Swap in a splat that finished loading, framing the camera to fit it.
     fn drain_pending_load(&mut self) {
+        // Don't consume the inbox until graphics exists, or a file dropped during
+        // async init would be taken and silently lost. It stays queued until ready.
+        if self.graphics.borrow().is_none() {
+            return;
+        }
         let Some(gaussians) = self.load_inbox.borrow_mut().take() else {
             return;
         };
-        let (center, radius) = scene::bounds(&gaussians);
-        self.orbit.frame(center, radius);
-        if let Some(graphics) = self.graphics.borrow_mut().as_mut() {
-            graphics.load_gaussians(&gaussians);
+        let loaded = self
+            .graphics
+            .borrow_mut()
+            .as_mut()
+            .is_some_and(|g| g.load_gaussians(&gaussians));
+        // Only re-frame when the splat is actually shown.
+        if loaded {
+            let (center, radius) = scene::bounds(&gaussians);
+            self.orbit.frame(center, radius);
         }
     }
 }
@@ -102,17 +112,31 @@ impl ApplicationHandler for App {
         event_loop.set_control_flow(ControlFlow::Poll);
 
         // Build the GPU side; render starts once it lands in the shared slot.
+        // GPU init is fallible (e.g. no WebGPU), so on failure we log and — on the
+        // web — show a message instead of letting the panic blank the page.
         let slot = self.graphics.clone();
         #[cfg(not(target_arch = "wasm32"))]
         {
-            *slot.borrow_mut() = Some(pollster::block_on(Graphics::new(window.clone())));
-            window.request_redraw();
+            match pollster::block_on(Graphics::new(window.clone())) {
+                Ok(graphics) => {
+                    *slot.borrow_mut() = Some(graphics);
+                    window.request_redraw();
+                }
+                Err(e) => log::error!("GPU init failed: {e}"),
+            }
         }
         #[cfg(target_arch = "wasm32")]
         wasm_bindgen_futures::spawn_local(async move {
-            let graphics = Graphics::new(window.clone()).await;
-            *slot.borrow_mut() = Some(graphics);
-            window.request_redraw();
+            match Graphics::new(window.clone()).await {
+                Ok(graphics) => {
+                    *slot.borrow_mut() = Some(graphics);
+                    window.request_redraw();
+                }
+                Err(e) => {
+                    log::error!("GPU init failed: {e}");
+                    show_init_error(&e.to_string());
+                }
+            }
         });
     }
 
@@ -203,4 +227,40 @@ fn mount_canvas(window: &Window) {
 
     // The canvas fills the viewport via CSS; its pixel size is reconciled to the
     // CSS size each frame in `Graphics::render`, so nothing to size here.
+}
+
+/// Show a centred message when GPU init fails (e.g. WebGPU unavailable), so the
+/// user sees an explanation instead of a blank page. Best-effort: any DOM error
+/// is ignored (the panic-hook log is still the source of truth).
+#[cfg(target_arch = "wasm32")]
+fn show_init_error(detail: &str) {
+    const OVERLAY_STYLE: &str = "position:fixed;inset:0;display:flex;flex-direction:column;\
+        align-items:center;justify-content:center;text-align:center;padding:24px;gap:8px;\
+        color:#c9cdd6;font-family:ui-sans-serif,system-ui,sans-serif;";
+
+    let Some(document) = web_sys::window().and_then(|w| w.document()) else {
+        return;
+    };
+    let Some(body) = document.body() else {
+        return;
+    };
+    let Ok(overlay) = document.create_element("div") else {
+        return;
+    };
+    let _ = overlay.set_attribute("style", OVERLAY_STYLE);
+
+    // Use text nodes so the (wgpu-provided) detail can't inject markup.
+    if let Ok(headline) = document.create_element("div") {
+        let _ = headline.set_attribute("style", "font-weight:600;font-size:15px;");
+        headline.set_text_content(Some(
+            "This viewer needs WebGPU — try Chrome/Edge 113+ or Safari 18+.",
+        ));
+        let _ = overlay.append_child(&headline);
+    }
+    if let Ok(detail_el) = document.create_element("div") {
+        let _ = detail_el.set_attribute("style", "font-size:12px;opacity:0.65;max-width:32rem;");
+        detail_el.set_text_content(Some(detail));
+        let _ = overlay.append_child(&detail_el);
+    }
+    let _ = body.append_child(&overlay);
 }

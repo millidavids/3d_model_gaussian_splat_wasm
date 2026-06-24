@@ -32,20 +32,37 @@ pub fn sample_splat() -> Gaussians {
     Gaussians::from(gaussians)
 }
 
-/// Axis-aligned bounding centre and radius (half the box diagonal) of a splat,
-/// used to frame an arbitrary loaded splat in the orbit camera. Empty → unit.
+/// Centre and radius used to frame a loaded splat in the orbit camera.
+///
+/// Uses the centroid plus a few sigma of the spread rather than a raw min/max
+/// box: real trained splats often have a handful of stray "floater" gaussians
+/// far from the bulk, and an AABB would let one of them blow up the radius and
+/// frame the actual object as a distant speck. The result is clamped to the true
+/// max distance so it never frames larger than the splat. Empty → unit.
 pub fn bounds(gaussians: &Gaussians) -> (Vec3, f32) {
-    let mut min = Vec3::splat(f32::INFINITY);
-    let mut max = Vec3::splat(f32::NEG_INFINITY);
-    for g in gaussians.iter_gaussian() {
-        min = min.min(g.pos);
-        max = max.max(g.pos);
-    }
-    if !min.is_finite() || !max.is_finite() {
+    let count = gaussians.len();
+    if count == 0 {
         return (Vec3::ZERO, 1.0);
     }
-    let center = (min + max) * 0.5;
-    (center, (max - center).length().max(1e-3))
+    let n = count as f32;
+
+    let center = gaussians.iter_gaussian().map(|g| g.pos).sum::<Vec3>() / n;
+    if !center.is_finite() {
+        return (Vec3::ZERO, 1.0);
+    }
+
+    // One pass for mean distance, mean-square distance, and the true max.
+    let (dist_sum, dist_sq_sum, dist_max) =
+        gaussians
+            .iter_gaussian()
+            .fold((0.0f32, 0.0f32, 0.0f32), |(sum, sq, max), g| {
+                let d = (g.pos - center).length();
+                (sum + d, sq + d * d, max.max(d))
+            });
+    let mean = dist_sum / n;
+    let variance = (dist_sq_sum / n - mean * mean).max(0.0);
+    let radius = (mean + 2.5 * variance.sqrt()).min(dist_max).max(1e-3);
+    (center, radius)
 }
 
 /// Lay out points evenly on a sphere (Fibonacci lattice), coloured by surface
@@ -110,8 +127,8 @@ mod tests {
     #[test]
     fn bounds_of_sample_is_centred_and_sized() {
         let (center, radius) = bounds(&sample_splat());
-        // Sphere is at the origin; axes reach AXIS_LENGTH along +X/+Y/+Z, so the
-        // box centre sits a little off-origin and the radius is near AXIS_LENGTH.
+        // Centroid sits a hair off-origin (the axes bias it toward +X/+Y/+Z), and
+        // the robust radius lands a bit under AXIS_LENGTH (1.5).
         assert!(center.length() < 0.5, "roughly centred, got {center:?}");
         assert!(
             (0.5..2.5).contains(&radius),

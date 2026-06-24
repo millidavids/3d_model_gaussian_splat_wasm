@@ -19,6 +19,7 @@ wgpu.workspace = true
 winit.workspace = true
 glam.workspace = true
 log.workspace = true
+thiserror.workspace = true
 # Monotonic clock that works on both targets (re-exports std::time natively).
 web-time.workspace = true
 

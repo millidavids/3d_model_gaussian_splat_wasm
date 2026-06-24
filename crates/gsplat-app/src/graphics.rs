@@ -17,6 +17,25 @@ use crate::scene;
 const MAX_STD_DEV: f32 = 3.0;
 /// Overall splat size multiplier (1.0 = as authored).
 const SPLAT_SIZE: f32 = 1.0;
+/// SH degree for the flat synthetic sample (no view-dependent colour).
+const SAMPLE_SH_DEGREE: u8 = 0;
+/// SH degree for loaded splats (use the full SH so trained splats look right).
+const LOADED_SH_DEGREE: u8 = 3;
+
+/// Why GPU initialisation failed. These are real runtime conditions (no WebGPU,
+/// no suitable device, …), not invariants, so [`Graphics::new`] returns them for
+/// the caller to surface — see the error overlay in [`crate::app`].
+#[derive(Debug, thiserror::Error)]
+pub enum GraphicsError {
+    #[error("could not create a rendering surface: {0}")]
+    CreateSurface(#[from] wgpu::CreateSurfaceError),
+    #[error("no compatible WebGPU adapter — is WebGPU available in this browser?: {0}")]
+    RequestAdapter(#[from] wgpu::RequestAdapterError),
+    #[error("could not acquire a GPU device: {0}")]
+    RequestDevice(#[from] wgpu::RequestDeviceError),
+    #[error("could not create the splat viewer: {0}")]
+    CreateViewer(#[from] gs::ViewerCreateError),
+}
 
 /// Owns the GPU resources and the splat viewer for one window/canvas.
 pub struct Graphics {
@@ -33,14 +52,15 @@ pub struct Graphics {
 
 impl Graphics {
     /// Initialise wgpu against `window` and build the viewer for the sample splat.
-    pub async fn new(window: Arc<Window>) -> Self {
+    ///
+    /// Fallible: a browser without WebGPU (or no suitable device) returns
+    /// [`GraphicsError`] so the caller can show a message instead of crashing.
+    pub async fn new(window: Arc<Window>) -> Result<Self, GraphicsError> {
         let (init_width, init_height) = drawable_size(&window);
 
         let instance =
             wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
-        let surface = instance
-            .create_surface(window.clone())
-            .expect("create surface");
+        let surface = instance.create_surface(window.clone())?;
 
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
@@ -48,8 +68,7 @@ impl Graphics {
                 compatible_surface: Some(&surface),
                 force_fallback_adapter: false,
             })
-            .await
-            .expect("request a WebGPU adapter");
+            .await?;
 
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
@@ -57,8 +76,7 @@ impl Graphics {
                 required_limits: adapter.limits(),
                 ..Default::default()
             })
-            .await
-            .expect("request a device");
+            .await?;
 
         let surface_caps = surface.get_capabilities(&adapter);
         let surface_format = surface_caps.formats[0];
@@ -79,18 +97,10 @@ impl Graphics {
         log::info!("built sample splat with {} gaussians", gaussians.len());
 
         let camera = gs::Camera::new(0.1..1e4, 60f32.to_radians());
-        let mut viewer =
-            gs::Viewer::new(&device, config.view_formats[0], &gaussians).expect("create viewer");
-        viewer.update_gaussian_transform(
-            &queue,
-            SPLAT_SIZE,
-            GaussianDisplayMode::Splat,
-            GaussianShDegree::new(0).expect("sh degree 0 is valid"),
-            false,
-            GaussianMaxStdDev::new(MAX_STD_DEV).expect("max std dev in range"),
-        );
+        let mut viewer = gs::Viewer::new(&device, config.view_formats[0], &gaussians)?;
+        configure_viewer(&mut viewer, &queue, SAMPLE_SH_DEGREE);
 
-        Self {
+        Ok(Self {
             window,
             surface,
             device,
@@ -98,28 +108,27 @@ impl Graphics {
             config,
             camera,
             viewer,
-        }
+        })
     }
 
     /// Replace the displayed splat (e.g. from a dropped `.ply`/`.spz` file).
     ///
-    /// Rebuilds the viewer for `gaussians`. Uses SH degree 3 so real, trained
-    /// splats show their view-dependent colour (the synthetic sample is flat).
-    pub fn load_gaussians(&mut self, gaussians: &Gaussians) {
+    /// Rebuilds the viewer for `gaussians` (the viewer crate has no in-place
+    /// gaussian swap). Returns `false` if the viewer build fails so the caller
+    /// can skip re-framing the camera onto a splat that isn't shown.
+    #[must_use]
+    pub fn load_gaussians(&mut self, gaussians: &Gaussians) -> bool {
         match gs::Viewer::new(&self.device, self.config.view_formats[0], gaussians) {
             Ok(mut viewer) => {
-                viewer.update_gaussian_transform(
-                    &self.queue,
-                    SPLAT_SIZE,
-                    GaussianDisplayMode::Splat,
-                    GaussianShDegree::new(3).expect("sh degree 3 is valid"),
-                    false,
-                    GaussianMaxStdDev::new(MAX_STD_DEV).expect("max std dev in range"),
-                );
+                configure_viewer(&mut viewer, &self.queue, LOADED_SH_DEGREE);
                 self.viewer = viewer;
                 log::info!("loaded splat with {} gaussians", gaussians.len());
+                true
             }
-            Err(e) => log::error!("could not build viewer for loaded splat: {e:?}"),
+            Err(e) => {
+                log::error!("could not build viewer for loaded splat: {e:?}");
+                false
+            }
         }
     }
 
@@ -154,7 +163,11 @@ impl Graphics {
             wgpu::CurrentSurfaceTexture::Success(texture)
             | wgpu::CurrentSurfaceTexture::Suboptimal(texture) => texture,
             other => {
-                log::warn!("skipping frame, surface texture unavailable: {other:?}");
+                // Lost/Outdated/etc.: reconfigure so we recover next frame
+                // instead of staying black forever when the size is unchanged
+                // (resize() is the only other path that reconfigures).
+                log::warn!("surface texture unavailable, reconfiguring: {other:?}");
+                self.surface.configure(&self.device, &self.config);
                 return;
             }
         };
@@ -181,6 +194,19 @@ impl Graphics {
 
         texture.present();
     }
+}
+
+/// Apply the shared splat-display settings to a freshly-built viewer. Only the
+/// SH degree differs between the flat sample and a loaded splat.
+fn configure_viewer(viewer: &mut gs::Viewer, queue: &wgpu::Queue, sh_degree: u8) {
+    viewer.update_gaussian_transform(
+        queue,
+        SPLAT_SIZE,
+        GaussianDisplayMode::Splat,
+        GaussianShDegree::new(sh_degree).expect("sh degree in 0..=3"),
+        false,
+        GaussianMaxStdDev::new(MAX_STD_DEV).expect("max std dev in range"),
+    );
 }
 
 /// The surface's target size in physical pixels.

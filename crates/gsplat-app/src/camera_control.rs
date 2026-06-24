@@ -22,6 +22,13 @@ const MAX_DISTANCE: f32 = 20.0;
 const FRAME_DISTANCE_FACTOR: f32 = 2.5;
 /// Keep elevation just shy of the poles to avoid a degenerate look-direction.
 const PITCH_LIMIT: f32 = std::f32::consts::FRAC_PI_2 - 1e-3;
+/// Near plane as a fraction of the camera distance — scales with the framed splat
+/// so a tiny splat isn't clipped by a fixed near plane and a huge one isn't lost.
+const NEAR_PLANE_FRACTION: f32 = 0.01;
+/// Far plane headroom past the target, in splat radii.
+const FAR_RADIUS_MARGIN: f32 = 4.0;
+/// Approximate radius of the built-in sample splat (used before any `frame`).
+const SAMPLE_RADIUS: f32 = 1.5;
 
 /// Orbit state around a fixed target point.
 #[derive(Debug, Clone)]
@@ -32,6 +39,8 @@ pub struct OrbitCamera {
     yaw: f32,
     /// Elevation, radians.
     pitch: f32,
+    /// Radius of the framed splat — drives the near/far clip planes.
+    radius: f32,
     /// Zoom limits, kept relative to whatever splat is framed (see [`Self::frame`]).
     min_distance: f32,
     max_distance: f32,
@@ -45,6 +54,7 @@ impl OrbitCamera {
             distance: 4.0,
             yaw: 0.0,
             pitch: 0.35,
+            radius: SAMPLE_RADIUS,
             min_distance: MIN_DISTANCE,
             max_distance: MAX_DISTANCE,
         }
@@ -56,6 +66,7 @@ impl OrbitCamera {
     pub fn frame(&mut self, center: Vec3, radius: f32) {
         let radius = radius.max(1e-3);
         self.target = center;
+        self.radius = radius;
         self.distance = radius * FRAME_DISTANCE_FACTOR;
         self.min_distance = radius * 0.4;
         self.max_distance = radius * 12.0;
@@ -63,7 +74,7 @@ impl OrbitCamera {
 
     /// Rotate the orbit by a mouse drag of `(dx, dy)` pixels.
     pub fn orbit(&mut self, dx: f32, dy: f32) {
-        self.yaw -= dx * DRAG_SENSITIVITY;
+        self.yaw = (self.yaw - dx * DRAG_SENSITIVITY).rem_euclid(std::f32::consts::TAU);
         self.pitch = (self.pitch + dy * DRAG_SENSITIVITY).clamp(-PITCH_LIMIT, PITCH_LIMIT);
     }
 
@@ -75,15 +86,21 @@ impl OrbitCamera {
 
     /// Advance the idle auto-spin by `delta_time` seconds.
     pub fn advance(&mut self, delta_time: f32) {
-        self.yaw -= AUTO_SPIN_SPEED * delta_time;
+        self.yaw = (self.yaw - AUTO_SPIN_SPEED * delta_time).rem_euclid(std::f32::consts::TAU);
     }
 
-    /// Position `camera` on the orbit sphere, looking at the target.
+    /// Position `camera` on the orbit sphere, looking at the target, and set its
+    /// near/far planes to bracket the framed splat.
     pub fn apply_to(&self, camera: &mut gs::Camera) {
-        let forward = forward_from_angles(self.pitch, self.yaw);
         camera.pitch = self.pitch;
         camera.yaw = self.yaw;
-        camera.pos = self.target - forward * self.distance;
+        // get_forward() reads pitch/yaw, so set them first; reusing it keeps this
+        // in lockstep with the viewer's camera convention.
+        camera.pos = self.target - camera.get_forward() * self.distance;
+
+        let near = (self.distance * NEAR_PLANE_FRACTION).max(1e-4);
+        let far = (self.distance + self.radius * FAR_RADIUS_MARGIN).max(near * 10.0);
+        camera.z = near..far;
     }
 }
 
@@ -91,15 +108,6 @@ impl Default for OrbitCamera {
     fn default() -> Self {
         Self::new()
     }
-}
-
-/// Forward unit vector for a pitch/yaw, matching [`gs::Camera::get_forward`].
-fn forward_from_angles(pitch: f32, yaw: f32) -> Vec3 {
-    Vec3::new(
-        pitch.cos() * yaw.sin(),
-        pitch.sin(),
-        pitch.cos() * yaw.cos(),
-    )
 }
 
 #[cfg(test)]
@@ -116,8 +124,7 @@ mod tests {
         let to_target = orbit.target - camera.pos;
         assert!((to_target.length() - orbit.distance).abs() < 1e-4);
         // ...and the camera's forward points at the target.
-        let forward = forward_from_angles(camera.pitch, camera.yaw);
-        assert!(forward.dot(to_target.normalize()) > 0.999);
+        assert!(camera.get_forward().dot(to_target.normalize()) > 0.999);
     }
 
     #[test]

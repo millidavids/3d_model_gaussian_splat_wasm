@@ -70,14 +70,17 @@
 
 ## Where we paused — open decisions for the user
 
-Committed through Phase 1.5: `446bbc5` (loader). Deploy work (release build verified
-18 MB → 2.3 MB; `.github/workflows/deploy.yml`; README/CONCEPTS updates) is **staged but
-uncommitted**.
+**Deployed & live**: <https://millidavids.github.io/3d_model_gaussian_splat_wasm/> (GitHub Pages
+via Actions). Work is on **`main`** (renamed from `master`; the Pages environment only permits
+`main`). A `max`-effort `/code-review` ran and its findings are fixed (graceful
+fallible GPU init + WebGPU error overlay; drop-during-init no longer lost; robust outlier-
+resistant `bounds`; near/far planes scale with the framed splat; lost-surface recovery; pinned
+`wasm-bindgen`; cleanup). Remaining review notes deferred: per-frame canvas reflow (load-bearing
+for the size fix), viewer-rebuild-per-load (no cheaper public API), multi-file / concurrent-drop
+edge cases.
 
-1. **Finish the deploy** (two manual steps only the owner can do): in the GitHub repo,
-   Settings → Pages → Source = "GitHub Actions"; then **push** (the workflow deploys on push
-   to `main`/`master`). Remote exists: `origin git@github.com:millidavids/3d_model_gaussian_splat_wasm.git`.
-   Note: local branch is `master`; the workflow triggers on both `main` and `master`.
+1. **Branch cleanup (owner action):** the remote default is still `master`. Switch it to `main`
+   (Settings → General → Default branch), then `master` can be deleted.
 2. **Next step — Phase 2 (training from a posed dataset).** Opens with the *other half* of
    Spike 1: is Brush (`brush-render`/`brush-train`) consumable as a pinned dependency, or must
    we vendor/fork?
